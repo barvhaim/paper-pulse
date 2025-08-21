@@ -21,7 +21,7 @@ def _get_model_parameters() -> Dict:
 
 
 def get_llm_client(
-    model_name: str = "granite3.3:8b",
+    model_name: str = "llama3.1:8b",
 ) -> Any:
     """
     Returns an LLM client based on the specified model name and provider type.
