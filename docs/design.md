@@ -8,7 +8,7 @@
 - Direct Slack delivery of research digests
 
 ### Core Agents
-- Paper Discovery Agent - Fetches papers from Hugging Face
+- Paper Discovery Agent - Fetches papers from Hugging Face and arxiv by user preferences
 - Content Extraction Agent - Handles PDF parsing with Docling (pure extraction, no analysis)
 - Research Analyzer Agent - Performs LLM-based analysis on extracted content
 - Delivery Agent - Formats and sends to Slack
