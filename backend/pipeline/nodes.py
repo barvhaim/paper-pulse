@@ -10,12 +10,24 @@ from langgraph.types import Command, Send
 from backend.pipeline.state import PipelineState, SinglePaperState
 from backend.pipeline.node_types import (
     MAP_EXTRACTION_NODE,
+    PROCESS_SINGLE_PAPER_NODE,
     EXTRACT_SINGLE_PAPER_NODE,
     ANALYZE_SINGLE_PAPER_NODE,
     COLLECT_RESULTS_NODE,
     DELIVERY_NODE,
 )
-from backend.data_model.paper import Paper, Author, User
+from backend.data_model.paper import (
+    Paper,
+    Author,
+    User,
+    UserProfile,
+    UserPermissions,
+    PaperCore,
+    PaperMetadata,
+    PaperEngagement,
+    PaperSubmission,
+    AIContent,
+)
 
 
 def _fetch_daily_papers(limit: int = 20) -> List[Paper]:
@@ -51,17 +63,23 @@ def _fetch_daily_papers(limit: int = 20) -> List[Paper]:
                     user = None
                     if author_data.get("user"):
                         user_data = author_data["user"]
-                        user = User(
-                            id=user_data.get("_id", ""),
+                        profile = UserProfile(
                             avatar_url=user_data.get("avatarUrl"),
                             fullname=user_data.get("fullname"),
                             username=user_data.get("user"),
                             user_type=user_data.get("type"),
+                            follower_count=user_data.get("followerCount"),
+                        )
+                        permissions = UserPermissions(
                             is_pro=user_data.get("isPro"),
                             is_hf=user_data.get("isHf"),
                             is_hf_admin=user_data.get("isHfAdmin"),
                             is_mod=user_data.get("isMod"),
-                            follower_count=user_data.get("followerCount"),
+                        )
+                        user = User(
+                            id=user_data.get("_id", ""),
+                            profile=profile,
+                            permissions=permissions,
                         )
 
                     author = Author(
@@ -78,51 +96,80 @@ def _fetch_daily_papers(limit: int = 20) -> List[Paper]:
                 submitted_by = None
                 if paper_data.get("submittedBy"):
                     sb_data = paper_data["submittedBy"]
-                    submitted_by = User(
-                        id=sb_data.get("_id", ""),
+                    profile = UserProfile(
                         avatar_url=sb_data.get("avatarUrl"),
                         fullname=sb_data.get("fullname"),
                         username=sb_data.get("name"),
                         user_type=sb_data.get("type"),
+                        follower_count=sb_data.get("followerCount"),
+                    )
+                    permissions = UserPermissions(
                         is_pro=sb_data.get("isPro"),
                         is_hf=sb_data.get("isHf"),
                         is_hf_admin=sb_data.get("isHfAdmin"),
                         is_mod=sb_data.get("isMod"),
-                        follower_count=sb_data.get("followerCount"),
+                    )
+                    submitted_by = User(
+                        id=sb_data.get("_id", ""),
+                        profile=profile,
+                        permissions=permissions,
                     )
 
                 submitted_on_daily_by = None
                 if paper_data.get("submittedOnDailyBy"):
                     sodb_data = paper_data["submittedOnDailyBy"]
-                    submitted_on_daily_by = User(
-                        id=sodb_data.get("_id", ""),
+                    profile = UserProfile(
                         avatar_url=sodb_data.get("avatarUrl"),
                         fullname=sodb_data.get("fullname"),
                         username=sodb_data.get("user"),
                         user_type=sodb_data.get("type"),
                     )
+                    submitted_on_daily_by = User(
+                        id=sodb_data.get("_id", ""),
+                        profile=profile,
+                    )
 
-                # Create Paper object
-                paper = Paper(
+                # Create Paper object with nested structure
+                core = PaperCore(
                     id=paper_data.get("id", ""),
                     title=paper_data.get("title", ""),
                     authors=authors,
                     summary=paper_data.get("summary", ""),
                     published_at=paper_data.get("publishedAt"),
-                    submitted_on_daily_at=paper_data.get("submittedOnDailyAt"),
+                )
+
+                metadata = PaperMetadata(
                     media_urls=paper_data.get("mediaUrls", []),
                     project_page=paper_data.get("projectPage"),
                     github_repo=paper_data.get("githubRepo"),
                     thumbnail=paper_data.get("thumbnail"),
+                    github_stars=paper_data.get("githubStars"),
+                )
+
+                engagement = PaperEngagement(
                     upvotes=paper_data.get("upvotes", 0),
                     num_comments=paper_data.get("numComments", 0),
                     discussion_id=paper_data.get("discussionId"),
-                    ai_summary=paper_data.get("ai_summary"),
-                    ai_keywords=paper_data.get("ai_keywords", []),
-                    github_stars=paper_data.get("githubStars"),
+                )
+
+                submission = PaperSubmission(
                     submitted_by=submitted_by,
                     submitted_on_daily_by=submitted_on_daily_by,
+                    submitted_on_daily_at=paper_data.get("submittedOnDailyAt"),
                     is_author_participating=paper_data.get("isAuthorParticipating"),
+                )
+
+                ai_content = AIContent(
+                    ai_summary=paper_data.get("ai_summary"),
+                    ai_keywords=paper_data.get("ai_keywords", []),
+                )
+
+                paper = Paper(
+                    core=core,
+                    metadata=metadata,
+                    engagement=engagement,
+                    submission=submission,
+                    ai_content=ai_content,
                 )
                 papers.append(paper)
 
@@ -138,9 +185,9 @@ def _fetch_daily_papers(limit: int = 20) -> List[Paper]:
 
 def paper_discovery_node(state: PipelineState) -> Command:
     """
-    Discover papers from Hugging Face and arXiv based on user preferences.
+    Discover papers from Hugging Face based on user preferences.
 
-    Fetches papers from configured sources, filters by categories and keywords,
+    Fetches papers from configured sources, (TO-DO filters by categories and keywords),
     and updates state with discovered papers.
     """
     logging.info(f"Starting paper discovery for pipeline {state['pipeline_id']}")
@@ -151,7 +198,6 @@ def paper_discovery_node(state: PipelineState) -> Command:
 
     logging.info(f"Fetching papers with limit={limit}")
 
-    # Fetch papers from Hugging Face
     papers = _fetch_daily_papers(limit=limit)
 
     if not papers:
@@ -167,7 +213,7 @@ def map_extraction_node(state: PipelineState) -> Command:
     """
     Map each discovered paper to individual extraction processing.
 
-    Simulates parallel processing by logging each paper individually.
+    Uses Send commands to process papers in parallel via subgraph invocation.
     """
     logging.info(f"Mapping papers for extraction in pipeline {state['pipeline_id']}")
 
@@ -176,100 +222,56 @@ def map_extraction_node(state: PipelineState) -> Command:
         return Command(goto=DELIVERY_NODE, update={"processing_complete": True})
 
     paper_count = len(state["discovered_papers"])
-    logging.info(f"Mapping {paper_count} papers for parallel extraction")
+    logging.info(
+        f"Mapping {paper_count} papers for parallel processing via Send commands"
+    )
 
-    # Simulate individual paper processing with detailed logging
-    processed_papers = []
-    extraction_results = {}
-    analysis_results = {}
-
+    # Create Send commands for parallel processing
+    send_commands = []
     for idx, paper in enumerate(state["discovered_papers"]):
-        pipeline_id = state["pipeline_id"]
-
-        # Simulate extraction node logging
-        logging.info(
-            f"[Pipeline {pipeline_id}] [Paper {idx}] Starting extraction for: {paper.title}"
-        )
-        logging.info(f"[Pipeline {pipeline_id}] [Paper {idx}] Paper ID: {paper.id}")
-        logging.info(
-            f"[Pipeline {pipeline_id}] [Paper {idx}] Authors: {paper.author_list}"
-        )
-
-        extracted_content = {
-            "status": "extracted",
-            "content": "placeholder",
-            "paper_id": paper.id,
-            "extraction_timestamp": datetime.now().isoformat(),
+        paper_state = {
+            "paper": paper,
+            "paper_index": idx,
+            "pipeline_id": state["pipeline_id"],
+            "extracted_content": None,
+            "analysis": None,
+            "errors": None,
         }
-        extraction_results[idx] = extracted_content
+        send_commands.append(Send(PROCESS_SINGLE_PAPER_NODE, paper_state))
 
-        logging.info(
-            f"[Pipeline {pipeline_id}] [Paper {idx}] Content extraction completed - proceeding to analysis"
-        )
+    logging.info(f"Created {len(send_commands)} Send commands for parallel processing")
 
-        # Simulate analysis node logging
-        logging.info(
-            f"[Pipeline {pipeline_id}] [Paper {idx}] Starting analysis for: {paper.title}"
-        )
-        logging.info(
-            f"[Pipeline {pipeline_id}] [Paper {idx}] Using extracted content from: {extracted_content['extraction_timestamp']}"
-        )
-        if paper.ai_summary:
-            logging.info(
-                f"[Pipeline {pipeline_id}] [Paper {idx}] AI Summary available: {paper.ai_summary[:100]}..."
-            )
-        if paper.ai_keywords:
-            logging.info(
-                f"[Pipeline {pipeline_id}] [Paper {idx}] AI Keywords: {', '.join(paper.ai_keywords[:5])}"
-            )
+    return Command(goto=send_commands, update={"parallel_processing_started": True})
 
-        analysis = {
-            "status": "analyzed",
-            "paper_id": paper.id,
-            "tldr": f"Analysis placeholder for {paper.title}",
-            "key_contributions": [f"Contribution analysis for {paper.id}"],
-            "technical_insights": [f"Technical insight for {paper.title}"],
-            "analysis_timestamp": datetime.now().isoformat(),
-        }
-        analysis_results[idx] = analysis
 
-        logging.info(
-            f"[Pipeline {pipeline_id}] [Paper {idx}] Analysis completed - proceeding to collect results"
-        )
+def process_single_paper_node(state: SinglePaperState) -> Command:
+    """
+    Process a single paper by invoking the subgraph.
 
-        processed_papers.append(paper)
+    This node receives Send commands and invokes the subgraph for isolated processing.
+    """
+    from backend.pipeline.graph import build_single_paper_subgraph
 
-    # Simulate collect results logging
-    logging.info(
-        f"[Pipeline {pipeline_id}] Collecting results from {paper_count} papers"
-    )
-    for idx, paper in enumerate(processed_papers):
-        logging.info(
-            f"[Pipeline {pipeline_id}] Collected results for paper {idx}: {paper.title}"
-        )
-        logging.info(
-            f"[Pipeline {pipeline_id}] Paper {idx}: Extraction completed at {extraction_results[idx]['extraction_timestamp']}"
-        )
-        logging.info(
-            f"[Pipeline {pipeline_id}] Paper {idx}: Analysis completed at {analysis_results[idx]['analysis_timestamp']}"
-        )
+    paper = state["paper"]
+    paper_index = state["paper_index"]
+    pipeline_id = state["pipeline_id"]
 
     logging.info(
-        f"[Pipeline {pipeline_id}] Results collection completed - proceeding to delivery"
-    )
-    logging.info(
-        f"[Pipeline {pipeline_id}] Summary: {len(extraction_results)} extractions, {len(analysis_results)} analyses"
+        f"[Pipeline {pipeline_id}] [Paper {paper_index}] Processing paper via subgraph: {paper.title}"
     )
 
-    return Command(
-        goto=DELIVERY_NODE,
-        update={
-            "processed_papers": processed_papers,
-            "extraction_results": extraction_results,
-            "analysis_results": analysis_results,
-            "processing_complete": True,
-        },
+    # Build and invoke the subgraph
+    subgraph = build_single_paper_subgraph()
+    result = subgraph.invoke(state)
+
+    logging.info(
+        f"[Pipeline {pipeline_id}] [Paper {paper_index}] Subgraph processing completed"
     )
+
+    # Create unique keys to avoid conflicts when updating main state
+    result_key = f"paper_result_{paper_index}_{pipeline_id.replace('-', '_')}"
+
+    return Command(goto=COLLECT_RESULTS_NODE, update={result_key: result})
 
 
 def extract_single_paper_node(state: SinglePaperState) -> Command:
@@ -377,22 +379,24 @@ def analyze_single_paper_node(state: SinglePaperState) -> Command:
         f"[Pipeline {pipeline_id}] [Paper {paper_index}] Analysis completed - proceeding to collect results"
     )
 
-    return Command(goto=COLLECT_RESULTS_NODE, update={"analysis": analysis})
+    return Command(goto=END, update={"analysis": analysis})
 
 
-def collect_results_node(state: list[SinglePaperState]) -> Command:
+def collect_results_node(state: PipelineState) -> Command:
     """
     Collect results from all processed papers and merge into main pipeline state.
 
     This is the "reduce" step that aggregates all individual paper results.
     """
-    if isinstance(state, list):
-        paper_count = len(state)
-        pipeline_id = state[0]["pipeline_id"] if state else "unknown"
-    else:
-        paper_count = 0
-        pipeline_id = state.get("pipeline_id", "unknown")
+    pipeline_id = state.get("pipeline_id", "unknown")
 
+    # Find all paper result keys in the state
+    paper_results = {}
+    for key, value in state.items():
+        if key.startswith("paper_result_") and isinstance(value, dict):
+            paper_results[key] = value
+
+    paper_count = len(paper_results)
     logging.info(
         f"[Pipeline {pipeline_id}] Collecting results from {paper_count} papers"
     )
@@ -402,33 +406,32 @@ def collect_results_node(state: list[SinglePaperState]) -> Command:
     extraction_results = {}
     analysis_results = {}
 
-    if isinstance(state, list):
-        for paper_state in state:
-            paper_idx = paper_state.get("paper_index", 0)
-            paper = paper_state.get("paper")
-            processed_papers.append(paper)
+    for result_key, paper_result in paper_results.items():
+        paper_idx = paper_result.get("paper_index", 0)
+        paper = paper_result.get("paper")
+        processed_papers.append(paper)
 
-            # Log individual paper completion
-            if hasattr(paper, "title"):
-                paper_title = paper.title
-            else:
-                paper_title = paper.get("title", "Unknown") if paper else "Unknown"
+        # Log individual paper completion
+        if hasattr(paper, "title"):
+            paper_title = paper.title
+        else:
+            paper_title = paper.get("title", "Unknown") if paper else "Unknown"
 
+        logging.info(
+            f"[Pipeline {pipeline_id}] Collected results for paper {paper_idx}: {paper_title}"
+        )
+
+        if "extracted_content" in paper_result:
+            extraction_results[paper_idx] = paper_result["extracted_content"]
             logging.info(
-                f"[Pipeline {pipeline_id}] Collected results for paper {paper_idx}: {paper_title}"
+                f"[Pipeline {pipeline_id}] Paper {paper_idx}: Extraction completed at {paper_result['extracted_content'].get('extraction_timestamp', 'unknown time')}"
             )
 
-            if "extracted_content" in paper_state:
-                extraction_results[paper_idx] = paper_state["extracted_content"]
-                logging.info(
-                    f"[Pipeline {pipeline_id}] Paper {paper_idx}: Extraction completed at {paper_state['extracted_content'].get('extraction_timestamp', 'unknown time')}"
-                )
-
-            if "analysis" in paper_state:
-                analysis_results[paper_idx] = paper_state["analysis"]
-                logging.info(
-                    f"[Pipeline {pipeline_id}] Paper {paper_idx}: Analysis completed at {paper_state['analysis'].get('analysis_timestamp', 'unknown time')}"
-                )
+        if "analysis" in paper_result:
+            analysis_results[paper_idx] = paper_result["analysis"]
+            logging.info(
+                f"[Pipeline {pipeline_id}] Paper {paper_idx}: Analysis completed at {paper_result['analysis'].get('analysis_timestamp', 'unknown time')}"
+            )
 
     logging.info(
         f"[Pipeline {pipeline_id}] Results collection completed - proceeding to delivery"
