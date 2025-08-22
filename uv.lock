@@ -1077,6 +1077,7 @@ dependencies = [
     { name = "beeai-framework" },
     { name = "langgraph" },
     { name = "python-dotenv" },
+    { name = "requests" },
 ]
 
 [package.dev-dependencies]
@@ -1091,6 +1092,7 @@ requires-dist = [
     { name = "beeai-framework", specifier = ">=0.1.36" },
     { name = "langgraph", specifier = ">=0.6.6" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
+    { name = "requests", specifier = ">=2.32.5" },
 ]
 
 [package.metadata.requires-dev]

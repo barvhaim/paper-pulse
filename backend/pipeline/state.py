@@ -2,40 +2,29 @@
 
 from typing import TypedDict, List, Dict, Any, Optional
 from datetime import datetime
+from backend.data_model.paper import Paper
 
 
 class PipelineState(TypedDict):
     """State object that flows through the pipeline nodes."""
 
     # Input
-    user_preferences: Dict[str, Any]
-    date_filter: Optional[datetime]
+    settings: Dict[str, Any]
 
     # Paper Discovery output
-    discovered_papers: Optional[List[Dict[str, Any]]]
-
-    # Content Extraction output
-    extracted_contents: Optional[Dict[str, Dict[str, Any]]]  # paper_url -> content
-
-    # Research Analyzer output
-    analyses: Optional[Dict[str, Dict[str, Any]]]  # paper_url -> analysis
-
-    # Delivery output
-    delivery_content: Optional[Dict[str, Any]]
-    delivery_status: Optional[Dict[str, Any]]
+    discovered_papers: List[Paper]
 
     # Metadata
     pipeline_id: str
     start_time: Optional[datetime]
-    current_node: Optional[str]
-    errors: Optional[List[Dict[str, Any]]]
+    error: Optional[str]
 
 
 class SinglePaperState(TypedDict):
     """State for processing a single paper through extraction and analysis."""
 
     # Paper data
-    paper: Dict[str, Any]
+    paper: Paper
 
     # Processing results
     extracted_content: Optional[Dict[str, Any]]

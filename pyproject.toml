@@ -8,6 +8,7 @@ dependencies = [
     "beeai-framework>=0.1.36",
     "langgraph>=0.6.6",
     "python-dotenv>=1.1.1",
+    "requests>=2.32.5",
 ]
 
 [dependency-groups]
