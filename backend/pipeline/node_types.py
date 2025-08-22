@@ -1,6 +1,8 @@
 """Node types for the paper-pulse pipeline workflow."""
 
 PAPER_DISCOVERY_NODE = "paper_discovery_node"
-CONTENT_EXTRACTION_NODE = "content_extraction_node"
-RESEARCH_ANALYZER_NODE = "research_analyzer_node"
+MAP_EXTRACTION_NODE = "map_extraction_node"
+EXTRACT_SINGLE_PAPER_NODE = "extract_single_paper_node"
+ANALYZE_SINGLE_PAPER_NODE = "analyze_single_paper_node"
+COLLECT_RESULTS_NODE = "collect_results_node"
 DELIVERY_NODE = "delivery_node"
