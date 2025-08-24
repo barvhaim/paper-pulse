@@ -11,7 +11,7 @@ A daily research paper digest system that automatically discovers, processes, an
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/barvhaim/paper-pulse.git
 cd paper-pulse
 ```
 
